@@ -1,86 +1,81 @@
-module ReactNative.ReactNative
-    ( VTree
-    , node, view, text, image
-    , encode
-    , onPress
-    ) where
+module ReactNative.ReactNative (VTree, node, view, text, image, string, property, style, imageSource, onPress) where
 
 import Json.Encode
 import Json.Decode
 import Signal
 import ReactNative.Style as RnStyle
-
 import Native.ElmFunctions
 import Native.ReactNative
 
 
-type alias EventHandlerRef = Int
+type alias EventHandlerRef =
+  Int
 
 
 type VTree
-  = VNode String (List RnStyle.Style) (List VTree)
-  | VText (List RnStyle.Style) (Maybe (String, EventHandlerRef)) String
-  | VImage (List RnStyle.Style) String
+  = VTree
 
 
-node : String -> List RnStyle.Style -> List VTree -> VTree
-node tagName styles children =
-  VNode tagName styles children
+type Property
+  = Property
 
 
-view : List RnStyle.Style -> List VTree -> VTree
-view styles children =
-  VNode "View" styles children
+
+-- Nodes
 
 
-text : List RnStyle.Style -> Maybe (String, EventHandlerRef) -> String -> VTree
-text styles handler textContent =
-  VText styles handler textContent
+node : String -> List Property -> List VTree -> VTree
+node =
+  Native.ReactNative.node
 
 
-image : List RnStyle.Style -> String -> VTree
-image styles source =
-  VImage styles source
+view : List Property -> List VTree -> VTree
+view =
+  node "React.View"
 
 
-on : Json.Decode.Decoder a -> (a -> Signal.Message) -> EventHandlerRef
-on decoder toMessage =
-  Native.ReactNative.on decoder toMessage
+string : String -> VTree
+string =
+  Native.ReactNative.stringNode
 
 
-onPress : Signal.Address a -> a -> (String, EventHandlerRef)
+text : List Property -> String -> VTree
+text props textContent =
+  node "React.Text" props [ (string textContent) ]
+
+
+image : List Property -> String -> VTree
+image props source =
+  node "React.Image" ((imageSource source) :: props) []
+
+
+
+-- Properties
+
+
+property : String -> Json.Decode.Value -> Property
+property =
+  Native.ReactNative.property
+
+
+style : List RnStyle.Style -> Property
+style styles =
+  styles
+    |> RnStyle.encode
+    |> property "style"
+
+
+imageSource : String -> Property
+imageSource uri =
+  Json.Encode.object [ ( "uri", Json.Encode.string uri ) ]
+    |> property "source"
+
+
+on : String -> Json.Decode.Decoder a -> (a -> Signal.Message) -> Property
+on =
+  Native.ReactNative.on
+
+
+onPress : Signal.Address a -> a -> Property
 onPress address msg =
-  ("onPress", on Json.Decode.value (\_ -> Signal.message address msg))
-
-
-encode : VTree -> Json.Encode.Value
-encode vtree =
-  case vtree of
-    VNode tagName styles children ->
-      Json.Encode.object
-        [ ("tagName", Json.Encode.string tagName)
-        , ("style", RnStyle.encode styles)
-        , ("children", Json.Encode.list (List.map encode children))
-        ]
-    VText styles handler textContent ->
-      Json.Encode.object <|
-        (maybeEncodeHandler handler) ++
-        [ ("tagName", Json.Encode.string "Text")
-        , ("style", RnStyle.encode styles)
-        , ("children", Json.Encode.list [Json.Encode.string textContent])
-        ]
-    VImage styles source ->
-      Json.Encode.object
-        [ ("tagName", Json.Encode.string "Image")
-        , ("style", RnStyle.encode styles)
-        , ("source", Json.Encode.string source)
-        ]
-
-
-maybeEncodeHandler : Maybe (String, EventHandlerRef) -> List (String, Json.Encode.Value)
-maybeEncodeHandler handler =
-  case handler of
-    Just (handlerName, handlerRef) ->
-      (handlerName, Json.Encode.int handlerRef) :: []
-    Nothing ->
-      []
+  on "Press" Json.Decode.value (\_ -> Signal.message address msg)

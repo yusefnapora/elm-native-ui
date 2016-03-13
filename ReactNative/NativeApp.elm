@@ -3,18 +3,20 @@ module ReactNative.NativeApp (start) where
 import Json.Encode
 import ReactNative.ReactNative as RN
 
-type Action a = Init | ConfigAction a
+
+type Action a
+  = Init
+  | ConfigAction a
 
 
 type alias Config model action =
   { model : model
   , view : Signal.Address action -> model -> RN.VTree
   , update : action -> model -> model
-  , init : Signal ()
   }
 
 
-start : Config model action -> Signal Json.Encode.Value
+start : Config model action -> Signal RN.VTree
 start config =
   let
     actions =
@@ -23,7 +25,6 @@ start config =
     merged =
       Signal.mergeMany
         [ Signal.map ConfigAction actions.signal
-        , Signal.map (always Init) config.init
         ]
 
     address =
@@ -40,14 +41,13 @@ start config =
     normalUpdate maybeAction model =
       case maybeAction of
         Just action ->
-            config.update action model
+          config.update action model
 
         Nothing ->
-            Debug.crash "This should never happen."
+          Debug.crash "This should never happen."
 
     model =
       Signal.foldp update config.model merged
   in
     model
-    |> Signal.map (config.view address)
-    |> Signal.map RN.encode
+      |> Signal.map (config.view address)
